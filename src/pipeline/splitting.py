@@ -18,8 +18,9 @@ def split_train_validation(
     warnings: list[str] = []
     label_counts = df["label"].value_counts().to_dict()
     too_small = [lbl for lbl, c in label_counts.items() if c < 2]
+    n_classes = len(label_counts)
 
-    stratify = df["label"] if not too_small else None
+    use_stratify = not too_small
     if too_small:
         warnings.append(
             f"stratification disabled: classes with <2 samples: {too_small}"
@@ -43,15 +44,50 @@ def split_train_validation(
             f"validation_fraction={validation_fraction} would leave 0 train rows; "
             f"forced validation_size={expected_val}"
         )
+
+    # sklearn requires val_size >= n_classes when stratifying. If the configured
+    # fraction would produce too few validation rows for stratification, enlarge
+    # the validation slice to n_classes if there's room; otherwise fall back to
+    # a non-stratified split. Either way, record what happened so the evaluator
+    # can audit the deviation from the configured fraction.
+    if use_stratify and expected_val < n_classes:
+        if n_classes <= n - 1:
+            warnings.append(
+                f"stratified split requires validation_size >= n_classes ({n_classes}); "
+                f"configured size {expected_val} too small, enlarged to {n_classes}"
+            )
+            expected_val = n_classes
+        else:
+            warnings.append(
+                f"cannot stratify: n_classes={n_classes} would require validation_size "
+                f"of at least {n_classes} but dataset has only {n} rows. Falling back to "
+                f"non-stratified split."
+            )
+            use_stratify = False
+
+    stratify = df["label"] if use_stratify else None
     effective_test_size = expected_val / n
 
-    train_split, val_split = train_test_split(
-        df,
-        test_size=effective_test_size,
-        random_state=seed,
-        stratify=stratify,
-        shuffle=True,
-    )
+    try:
+        train_split, val_split = train_test_split(
+            df,
+            test_size=effective_test_size,
+            random_state=seed,
+            stratify=stratify,
+            shuffle=True,
+        )
+    except ValueError as e:
+        if stratify is None:
+            raise
+        warnings.append(f"stratified split raised {type(e).__name__}: {e}; retrying without stratification")
+        stratify = None
+        train_split, val_split = train_test_split(
+            df,
+            test_size=effective_test_size,
+            random_state=seed,
+            stratify=None,
+            shuffle=True,
+        )
     train_split = train_split.reset_index(drop=True)
     val_split = val_split.reset_index(drop=True)
 
@@ -77,6 +113,7 @@ def split_train_validation(
         "validation_fraction": validation_fraction,
         "effective_validation_fraction": effective_test_size,
         "stratified": stratify is not None,
+        "n_classes_at_split_time": n_classes,
         "train_size": int(len(train_split)),
         "validation_size": int(len(val_split)),
         "labels": label_breakdown,

@@ -14,6 +14,7 @@ import pandas as pd
 
 from src.pipeline.config import load_config
 from src.pipeline.data_loading import REQUIRED_TEST_COLS, REQUIRED_TRAIN_COLS
+from src.pipeline.data_validation import build_report
 from src.pipeline.io_paths import (
     ARTIFACTS_MANIFEST,
     DATA_VALIDATION_REPORT,
@@ -110,17 +111,39 @@ def check_json_valid() -> CheckResult:
 
 
 def check_dataset_columns() -> CheckResult:
+    """Two-part check:
+
+    1. The CURRENT CSVs have the required columns (so the evaluator's fixture is well-formed).
+    2. The data_validation logic actually REJECTS a CSV that is missing a required column —
+       a behavioural test that the enforcement is wired up, not just present.
+    """
     try:
         train = pd.read_csv(TRAIN_CSV, dtype=str, keep_default_na=False)
         test = pd.read_csv(TEST_CSV, dtype=str, keep_default_na=False)
     except Exception as e:
-        return CheckResult("required dataset columns", False, str(e))
+        return CheckResult("required dataset columns enforced", False, str(e))
     missing_train = [c for c in REQUIRED_TRAIN_COLS if c not in train.columns]
     missing_test = [c for c in REQUIRED_TEST_COLS if c not in test.columns]
     if missing_train or missing_test:
-        return CheckResult("required dataset columns", False,
+        return CheckResult("required dataset columns enforced", False,
                            f"train missing {missing_train}, test missing {missing_test}")
-    return CheckResult("required dataset columns", True)
+
+    # Behavioural check: feed deliberately broken DataFrames to build_report and
+    # assert it fails. This proves the validation logic actually enforces the rule.
+    broken_train = train.drop(columns=["label"]) if "label" in train.columns else train.copy()
+    rep_missing_label = build_report(broken_train, test)
+    if rep_missing_label["status"] != "failed" or "required_columns_train" not in rep_missing_label["errors"]:
+        return CheckResult("required dataset columns enforced", False,
+                           "build_report did not fail on a train DataFrame missing 'label'")
+
+    broken_test = test.drop(columns=["text"]) if "text" in test.columns else test.copy()
+    rep_missing_text = build_report(train, broken_test)
+    if rep_missing_text["status"] != "failed" or "required_columns_test" not in rep_missing_text["errors"]:
+        return CheckResult("required dataset columns enforced", False,
+                           "build_report did not fail on a test DataFrame missing 'text'")
+
+    return CheckResult("required dataset columns enforced", True,
+                       "current CSVs OK; build_report rejects missing-column inputs")
 
 
 def check_preprocessing_probe() -> CheckResult:

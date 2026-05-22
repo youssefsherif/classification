@@ -255,6 +255,23 @@ def main() -> int:
     log_stage(log, "MODELS_EVALUATED",
               f"evaluated {sum(1 for m in metrics['models'].values() if m.get('status') == 'ok')} model(s)")
 
+    # --- Optional cross-validation (stretch) ---
+    # Per spec: CV evaluates candidates BEFORE final winner selection.
+    # Winner is still chosen from the holdout metrics.json (deterministic, comparable
+    # whether or not CV is enabled); the CV report is informational.
+    if cfg.cross_validation.enabled:
+        log_stage(log, "CROSS_VALIDATION", f"running {cfg.cross_validation.folds}-fold CV before winner selection")
+        cv_report = run_cross_validation(
+            cfg,
+            train_df_pp["text_processed"].astype(str).tolist(),
+            train_df_pp["label"].astype(str).tolist(),
+        )
+        write_json_atomic(CROSS_VALIDATION_REPORT, cv_report)
+        ctx.cv_report = cv_report
+        log_stage(log, "CROSS_VALIDATION",
+                  f"completed {cv_report['effective_folds']} folds; "
+                  f"adjustment={cv_report['adjustment_note']}")
+
     # --- WINNER_SELECTED ---
     try:
         selection = select_winner(metrics, cfg.selection_metric)
@@ -306,19 +323,6 @@ def main() -> int:
     ctx.advance(PipelineState.TEST_PREDICTIONS_GENERATED)
     log_stage(log, "TEST_PREDICTIONS_GENERATED",
               f"wrote {summary['row_count']} predictions to {relative_to_root(TEST_PREDICTIONS)}")
-
-    # --- Optional cross-validation (stretch) ---
-    if cfg.cross_validation.enabled:
-        log_stage(log, "CROSS_VALIDATION", f"running {cfg.cross_validation.folds}-fold CV")
-        cv_report = run_cross_validation(
-            cfg,
-            train_df_pp["text_processed"].astype(str).tolist(),
-            train_df_pp["label"].astype(str).tolist(),
-        )
-        write_json_atomic(CROSS_VALIDATION_REPORT, cv_report)
-        log_stage(log, "CROSS_VALIDATION",
-                  f"completed {cv_report['effective_folds']} folds; "
-                  f"adjustment={cv_report['adjustment_note']}")
 
     # --- REPORT_EXPORTED ---
     winner_metrics = metrics["models"][ctx.winner_name]

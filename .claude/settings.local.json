@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python -m pytest tests/ -q)",
+      "Bash(python run_pipeline.py)",
+      "Bash(python validate.py)"
+    ]
+  }
+}
