@@ -1,0 +1,16 @@
+{
+  "winner_name": "linear_svm",
+  "selection_metric": "macro_f1",
+  "labels": [
+    "negative",
+    "positive"
+  ],
+  "vectorizer_path": "models/vectorizer.joblib",
+  "winner_path": "models/winner.joblib",
+  "preprocessing_module": "src.pipeline.preprocessing",
+  "preprocessing_function": "preprocess_text",
+  "preprocessing_probe": {
+    "input": "  Hello   WORLD  ",
+    "expected": "hello world"
+  }
+}

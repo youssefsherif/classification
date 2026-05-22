@@ -1,0 +1,100 @@
+{
+  "timestamp_utc": "2026-05-22T09:14:14Z",
+  "random_seed": 42,
+  "config_snapshot": {
+    "random_seed": 42,
+    "validation_split": 0.2,
+    "models": [
+      "logistic_regression",
+      "linear_svm",
+      "naive_bayes"
+    ],
+    "vectorizer": {
+      "type": "tfidf",
+      "ngram_range": [
+        1,
+        2
+      ],
+      "max_features": 5000,
+      "min_df": 1
+    },
+    "selection_metric": "macro_f1",
+    "top_k_error_examples": 10,
+    "cross_validation": {
+      "enabled": false,
+      "folds": 5
+    }
+  },
+  "files_read": {
+    "train_csv": {
+      "path": "train.csv",
+      "rows": 10,
+      "sha256": "0a67bb5d2aadf7ecc9e5afe7ba4bc1754ea74224a0bbc59c947492704f58878a"
+    },
+    "test_csv": {
+      "path": "test.csv",
+      "rows": 3,
+      "sha256": "532f471731d40edcdab5cfc494800130401c5c2940d0c8985618f2d2ef7ba05d"
+    },
+    "config_json": {
+      "path": "config.json",
+      "sha256": "85948f3f6495064d7a3078b6779fccbc7d90d7380ccb720bfdc9c9b1a569bef9"
+    }
+  },
+  "encoding_used": "utf-8",
+  "stages_completed": [
+    "DATA_LOADED",
+    "DATA_VALIDATED",
+    "TEXT_PREPROCESSED",
+    "SPLIT_CREATED",
+    "FEATURES_FIT",
+    "MODELS_TRAINED",
+    "MODELS_EVALUATED",
+    "WINNER_SELECTED",
+    "ARTIFACTS_SAVED",
+    "TEST_PREDICTIONS_GENERATED",
+    "REPORT_EXPORTED"
+  ],
+  "models_trained": [
+    "linear_svm",
+    "logistic_regression",
+    "naive_bayes"
+  ],
+  "models_failed": [],
+  "winning_model": "linear_svm",
+  "selection_metric": "macro_f1",
+  "key_metrics": {
+    "accuracy": 0.5,
+    "macro_precision": 0.25,
+    "macro_recall": 0.5,
+    "macro_f1": 0.3333333333333333
+  },
+  "artifacts": {
+    "data_validation_report": "artifacts/data_validation_report.json",
+    "preprocessing_preview": "artifacts/preprocessing_preview.json",
+    "split_report": "artifacts/split_report.json",
+    "metrics": "artifacts/metrics.json",
+    "model_selection_report": "artifacts/model_selection_report.json",
+    "artifacts_manifest": "artifacts/artifacts_manifest.json",
+    "error_analysis": "artifacts/error_analysis.json",
+    "safeguards_report": "artifacts/safeguards_report.json",
+    "cross_validation_report": null,
+    "test_predictions": "artifacts/test_predictions.csv",
+    "vectorizer": "models/vectorizer.joblib",
+    "trained_models": {
+      "linear_svm": "models/model_linear_svm.joblib",
+      "logistic_regression": "models/model_logistic_regression.joblib",
+      "naive_bayes": "models/model_naive_bayes.joblib"
+    },
+    "winning_model": "models/winner.joblib",
+    "winner_meta": "models/winner.meta.json"
+  },
+  "environment": {
+    "python": "3.11.1",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "sklearn": "1.2.1",
+    "pandas": "1.5.3",
+    "numpy": "1.24.1",
+    "joblib": "1.2.0"
+  }
+}

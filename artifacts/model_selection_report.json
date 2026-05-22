@@ -1,0 +1,24 @@
+{
+  "winner": "linear_svm",
+  "primary_metric": "macro_f1",
+  "primary_value": 0.3333333333333333,
+  "ranking": [
+    {
+      "name": "linear_svm",
+      "macro_f1": 0.3333333333333333,
+      "macro_precision": 0.25
+    },
+    {
+      "name": "logistic_regression",
+      "macro_f1": 0.3333333333333333,
+      "macro_precision": 0.25
+    },
+    {
+      "name": "naive_bayes",
+      "macro_f1": 0.3333333333333333,
+      "macro_precision": 0.25
+    }
+  ],
+  "tie_break_applied": "alphabetical",
+  "reason": "Tied with logistic_regression on macro_f1 (0.333333) and macro_precision (0.250000); selected by alphabetical name order."
+}

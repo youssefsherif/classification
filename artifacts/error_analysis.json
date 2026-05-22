@@ -1,0 +1,19 @@
+{
+  "winning_model": "linear_svm",
+  "examples": [
+    {
+      "id": "9",
+      "text": "Very easy to use for first-time users",
+      "true_label": "positive",
+      "predicted_label": "negative",
+      "confidence_or_score": 0.23803673565454128,
+      "score_type": "margin",
+      "per_class_scores": {
+        "negative": 0.23803673565454128,
+        "positive": -0.23803673565454128
+      },
+      "raw_margin": -0.23803673565454128,
+      "reason": "Positive decision score (0.238) but wrong label; worth inspecting"
+    }
+  ]
+}

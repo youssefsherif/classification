@@ -1,0 +1,42 @@
+{
+  "status": "ok",
+  "checks": {
+    "required_columns_train": {
+      "passed": true,
+      "missing": []
+    },
+    "required_columns_test": {
+      "passed": true,
+      "missing": []
+    },
+    "distinct_labels": {
+      "passed": true,
+      "count": 2,
+      "labels": [
+        "negative",
+        "positive"
+      ]
+    },
+    "non_empty_text_train": {
+      "passed": true,
+      "empty_count": 0,
+      "empty_ids": []
+    },
+    "non_empty_text_test": {
+      "passed": true,
+      "empty_count": 0,
+      "empty_ids": []
+    },
+    "unique_ids_train": {
+      "passed": true,
+      "duplicate_count": 0,
+      "duplicates": []
+    },
+    "unique_ids_test": {
+      "passed": true,
+      "duplicate_count": 0,
+      "duplicates": []
+    }
+  },
+  "errors": []
+}

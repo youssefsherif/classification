@@ -1,0 +1,20 @@
+{
+  "random_seed": 42,
+  "validation_fraction": 0.2,
+  "effective_validation_fraction": 0.2,
+  "stratified": true,
+  "n_classes_at_split_time": 2,
+  "train_size": 8,
+  "validation_size": 2,
+  "labels": {
+    "negative": {
+      "train": 4,
+      "validation": 1
+    },
+    "positive": {
+      "train": 4,
+      "validation": 1
+    }
+  },
+  "warnings": []
+}

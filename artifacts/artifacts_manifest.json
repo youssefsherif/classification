@@ -1,0 +1,40 @@
+{
+  "stage": "ARTIFACTS_SAVED",
+  "vectorizer": {
+    "path": "models/vectorizer.joblib",
+    "sha256": "e8762367af1b9208bbba0db33789b0e22e805ccd4387a33c3d6a6aec2006b7fa"
+  },
+  "models": [
+    {
+      "name": "logistic_regression",
+      "path": "models/model_logistic_regression.joblib",
+      "sha256": "7b058ed9aa912da6b9c877d4b4a33c90f5969f6310a4aa9c22dc9adc45ce699f"
+    },
+    {
+      "name": "linear_svm",
+      "path": "models/model_linear_svm.joblib",
+      "sha256": "ed6ba70cdc49b7190ac8d1701a6ff2b5b6ca19e957b7fcffca26675d87711c4d"
+    },
+    {
+      "name": "naive_bayes",
+      "path": "models/model_naive_bayes.joblib",
+      "sha256": "fd5329892ed7d5eb16f5efb65a7c520bf5c3a05e2979381d06f5d91c166d6730"
+    }
+  ],
+  "winner": {
+    "name": "linear_svm",
+    "path": "models/winner.joblib",
+    "sha256": "ed6ba70cdc49b7190ac8d1701a6ff2b5b6ca19e957b7fcffca26675d87711c4d"
+  },
+  "winner_meta": {
+    "path": "models/winner.meta.json"
+  },
+  "reports": [
+    "artifacts/data_validation_report.json",
+    "artifacts/preprocessing_preview.json",
+    "artifacts/split_report.json",
+    "artifacts/metrics.json",
+    "artifacts/model_selection_report.json",
+    "artifacts/safeguards_report.json"
+  ]
+}

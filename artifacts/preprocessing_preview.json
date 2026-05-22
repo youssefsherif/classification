@@ -1,0 +1,52 @@
+{
+  "samples": [
+    {
+      "id": "1",
+      "original": "I loved the onboarding flow, it was simple and fast",
+      "processed": "i loved the onboarding flow, it was simple and fast",
+      "source": "train"
+    },
+    {
+      "id": "2",
+      "original": "The app crashes every time I try to upload a file",
+      "processed": "the app crashes every time i try to upload a file",
+      "source": "train"
+    },
+    {
+      "id": "3",
+      "original": "Support replied quickly and solved my issue",
+      "processed": "support replied quickly and solved my issue",
+      "source": "train"
+    },
+    {
+      "id": "4",
+      "original": "The latest update made navigation confusing",
+      "processed": "the latest update made navigation confusing",
+      "source": "train"
+    },
+    {
+      "id": "5",
+      "original": "Payment was processed smoothly",
+      "processed": "payment was processed smoothly",
+      "source": "train"
+    },
+    {
+      "id": "101",
+      "original": "The interface is intuitive and helpful",
+      "processed": "the interface is intuitive and helpful",
+      "source": "test"
+    },
+    {
+      "id": "102",
+      "original": "I keep getting errors during checkout",
+      "processed": "i keep getting errors during checkout",
+      "source": "test"
+    },
+    {
+      "id": "103",
+      "original": "Customer support was excellent",
+      "processed": "customer support was excellent",
+      "source": "test"
+    }
+  ]
+}
