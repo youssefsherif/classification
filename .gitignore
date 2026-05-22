@@ -5,8 +5,8 @@ __pycache__/
 .venv/
 venv/
 
-artifacts/
-models/
+# artifacts/ # is was added here by mistake.
+# models/
 
 .claude/
 
