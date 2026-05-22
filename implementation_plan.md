@@ -131,7 +131,7 @@ A dataclass `PipelineConfig` with **safe defaults** for every field so a partial
 | Field | Default | Notes |
 |---|---|---|
 | `random_seed` | `42` | piped into numpy, splitter, every model that accepts `random_state` |
-| `validation_split` | `0.2` | clamped to `(0.05, 0.5)`, warned on clamp |
+| `validation_split` | `0.2` | must satisfy `0.0 < x < 1.0`; values outside this range → exit 2. The pipeline uses the configured fraction exactly, with no silent rescaling. |
 | `models` | `["logistic_regression", "linear_svm", "naive_bayes"]` | unknown names raise a clear `ConfigError` listing valid options |
 | `vectorizer.type` | `"tfidf"` | also accepts `"count"`; anything else → `ConfigError` |
 | `vectorizer.ngram_range` | `[1, 2]` | parsed to tuple, validated `low<=high>=1` |
@@ -238,7 +238,7 @@ Corner case — tiny dataset (e.g. 3 rows): if `int(n * validation_split) == 0`,
 
 - Build `TfidfVectorizer` (or `CountVectorizer`) **from config** with `ngram_range`, `max_features`, `min_df`.
 - Fit on **train split only** to prevent validation leakage.
-- Persist to `models/vectorizer.joblib`.
+- **Held in the state context only — not written to disk here.** All binary persistence is centralized in `ARTIFACTS_SAVED` (§4.9) so the stage boundary is meaningful.
 - Corner case: if every term gets filtered by `min_df` (vocabulary empty), abort with a clear message recommending `min_df=1`. Exit `3`.
 
 ### 4.6 `MODELS_TRAINED` — `training.py`, `models.py`
@@ -279,7 +279,7 @@ MODEL_REGISTRY = {
 
 - Iterates `config.models`, instantiates each, fits on the **same** vectorized train split.
 - Wraps each `.fit()` in a `try/except`. If a single model fails, log the failure, record it in `metrics.json` with `"status": "failed", "error": "<message>"`, and continue with the others. If after training **fewer than 3 models succeed**, or the set of successful models no longer includes both a linear and a probabilistic family member, abort with exit `3` and a message listing the missing family. This protects the spec's "≥3 baselines, one linear, one probabilistic" requirement even when an individual training failure narrows the set below the threshold.
-- Persists each successful model to `models/model_<name>.joblib`.
+- **Fitted estimators are held in the state context only.** They are not written to disk in this stage — `ARTIFACTS_SAVED` (§4.9) is the sole binary writer. The failure list is also carried in the context and surfaces in `metrics.json` during `MODELS_EVALUATED`.
 
 The composition of `config.models` itself is validated at config-load time (§3), so an evaluator-supplied config that violates the requirement is rejected up front — not silently augmented, not "warn and proceed".
 
@@ -315,37 +315,68 @@ For each trained model, compute on the validation split:
 Pure function for testability:
 
 ```python
+EPS = 1e-12  # treat metric values within EPS as equal — guards against float noise
+
 def select_winner(metrics: dict, primary_metric: str) -> dict:
     candidates = [(name, m) for name, m in metrics["models"].items() if m["status"] == "ok"]
     if not candidates:
         raise SelectionError("no successful models to choose from")
-    # 1. primary metric (descending)
-    # 2. macro_precision (descending) as tie-breaker
-    # 3. model name (ascending alphabetical) as final tie-breaker
+
+    # Sort: 1) primary metric desc, 2) macro_precision desc, 3) name asc.
     candidates.sort(key=lambda kv: (-kv[1][primary_metric],
                                     -kv[1]["macro_precision"],
                                     kv[0]))
+    winner_name, winner_metrics = candidates[0]
+
+    # Determine which rule actually decided the winner by inspecting the
+    # runners-up. tie_break_applied is one of: "none", "macro_precision",
+    # "alphabetical".
+    competitors = [m for _, m in candidates[1:]]
+    tied_on_primary = [m for m in competitors
+                       if abs(m[primary_metric] - winner_metrics[primary_metric]) < EPS]
+    if not tied_on_primary:
+        tie_break_applied = "none"
+    else:
+        tied_on_precision = [m for m in tied_on_primary
+                             if abs(m["macro_precision"] - winner_metrics["macro_precision"]) < EPS]
+        tie_break_applied = "alphabetical" if tied_on_precision else "macro_precision"
+
+    reason = _format_reason(winner_name, winner_metrics, candidates, primary_metric,
+                            tie_break_applied)
+
     return {
-        "winner": candidates[0][0],
+        "winner": winner_name,
         "primary_metric": primary_metric,
-        "primary_value": candidates[0][1][primary_metric],
+        "primary_value": winner_metrics[primary_metric],
         "ranking": [{"name": n, primary_metric: m[primary_metric],
                      "macro_precision": m["macro_precision"]} for n, m in candidates],
-        "tie_break_applied": "<none|macro_precision|alphabetical>",
-        "reason": "Selected because it had the highest macro_f1 (0.847). Closest competitor logistic_regression at 0.823."
+        "tie_break_applied": tie_break_applied,   # "none" | "macro_precision" | "alphabetical"
+        "reason": reason,
     }
 ```
 
-This is **the** function unit-tested for tie-break correctness. `model_selection_report.json` is its return value, written to disk verbatim.
+`tie_break_applied` is **computed**, not a placeholder. The three possible values map directly to the spec's tie-break ladder:
+
+- `"none"` — the winner strictly beat all runners-up on the primary metric.
+- `"macro_precision"` — at least one runner-up tied on the primary metric and lost on macro_precision.
+- `"alphabetical"` — at least one runner-up tied on both primary metric and macro_precision; alphabetical name order decided it.
+
+`_format_reason()` produces a human-readable sentence that mentions the closest competitor and, when a tie-break was applied, the specific value(s) that were equal. For example:
+
+- `"none"` → `"Selected because it had the highest macro_f1 (0.847). Closest competitor logistic_regression at 0.823."`
+- `"macro_precision"` → `"Tied with linear_svm on macro_f1 (0.847); selected on higher macro_precision (0.891 vs 0.864)."`
+- `"alphabetical"` → `"Tied with naive_bayes on macro_f1 (0.847) and macro_precision (0.891); selected by alphabetical name order."`
+
+This is **the** function unit-tested for tie-break correctness (one test per branch). `model_selection_report.json` is its return value, written to disk verbatim.
 
 ### 4.9 `ARTIFACTS_SAVED` — `artifacts.py`
 
-The spec lists `ARTIFACTS_SAVED` as a discrete pipeline stage, so it gets its own module, log line, and verification step rather than being implicit in earlier stages. Earlier stages write **their own reports** (validation report, split report, metrics, selection report) eagerly, but the binary model artifacts and stable inference handles are deliberately bundled here so the evaluator sees a clear "everything required for inference is now on disk" boundary.
+The spec lists `ARTIFACTS_SAVED` as a discrete pipeline stage, so it gets its own module, log line, and verification step rather than being implicit in earlier stages. **All binary persistence happens here, and only here.** Earlier stages write **their own JSON reports** eagerly (validation report, split report, metrics, selection report — these are the artifacts that describe what happened during that stage), but the fitted vectorizer and every fitted model stay in the in-memory `StateContext` until this stage runs. That keeps the stage boundary meaningful and gives the evaluator a single grep-able log line confirming inference inputs are on disk.
 
 What this stage does, in order, with each substep logged under `[ARTIFACTS_SAVED]`:
 
-1. **Persist the vectorizer** to `models/vectorizer.joblib` via `joblib.dump`. (The vectorizer object was fit in `FEATURES_FIT` and held in the state context; this is the first time it touches disk.)
-2. **Persist every successfully trained model** to `models/model_<name>.joblib`. (Held in state context from `MODELS_TRAINED`.)
+1. **Persist the vectorizer** to `models/vectorizer.joblib` via `joblib.dump`. The vectorizer object was fit in `FEATURES_FIT` and carried in the state context until now.
+2. **Persist every successfully trained model** to `models/model_<name>.joblib`. The fitted estimators were carried in the state context from `MODELS_TRAINED`.
 3. **Copy the winning model** to `models/winner.joblib` (copy, not symlink — Windows compatibility) so the CLI has a stable, version-agnostic filename.
 4. **Write `models/winner.meta.json`** with:
    ```json
@@ -393,10 +424,13 @@ For the winning model:
 
 - Predict on the validation split.
 - Find misclassified rows.
-- For each, attempt to compute confidence:
-  - `predict_proba` if available (LogReg, NB) → confidence = `max(proba)`.
-  - else `decision_function` if available (LinearSVC, Ridge) → `score = max(decision_function)`, also store the per-class score dict.
+- For each, attempt to compute confidence via the shared helper `score_for(model, X)` (used by both error analysis and `inference.infer_one` so the CLI returns identical numbers):
+  - `predict_proba` if available (LogReg, NB) → `confidence = max(proba)`; also store the per-class proba dict.
+  - else `decision_function` if available (LinearSVC, Ridge) — **with an explicit binary special case**:
+    - **Binary classifier** (`len(model.classes_) == 2`): `decision_function` returns a 1D array of shape `(n_samples,)`, the signed margin against the positive class (`model.classes_[1]`). Convert to a per-class score dict `{classes_[0]: -margin, classes_[1]: +margin}`; the reported `confidence_or_score` is the score corresponding to the *predicted* label (i.e. `+margin` if positive class was predicted, `-margin` otherwise — so larger = more confident in the prediction). The raw signed margin is also stored under `raw_margin` so the sign is recoverable.
+    - **Multiclass** (`len(model.classes_) > 2`): `decision_function` returns shape `(n_samples, n_classes)`; the reported score is the value at the predicted class index, and the full per-class score dict is stored.
   - else `null`.
+- Note that decision-function scores are unbounded — they are *not* probabilities. The artifact field is named `confidence_or_score` and `error_analysis.json` records `score_type: "proba" | "margin" | "decision" | "none"` so downstream readers don't confuse the two scales.
 - Sort by ascending confidence (= "model was least sure" = most useful to inspect). Take `top_k_error_examples`, clamped to the number of available misclassifications.
 - `reason` is templated, not free-form: `"Low confidence prediction (0.51); model nearly chose true label"` or `"High confidence wrong prediction (0.94); potential labeling issue or hard sample"`. The template is chosen by simple rules on the score.
 
@@ -441,13 +475,24 @@ Writes `run_manifest.json`:
   "selection_metric":"macro_f1",
   "key_metrics":     {"accuracy": 1.0, "macro_f1": 1.0},
   "artifacts": {
-    "data_validation_report": "artifacts/data_validation_report.json",
-    "metrics":                "artifacts/metrics.json",
-    "model_selection_report": "artifacts/model_selection_report.json",
-    "error_analysis":         "artifacts/error_analysis.json",
-    "test_predictions":       "artifacts/test_predictions.csv",
-    "vectorizer":             "models/vectorizer.joblib",
-    "winning_model":          "models/winner.joblib"
+    "data_validation_report":   "artifacts/data_validation_report.json",
+    "preprocessing_preview":    "artifacts/preprocessing_preview.json",
+    "split_report":             "artifacts/split_report.json",
+    "metrics":                  "artifacts/metrics.json",
+    "model_selection_report":   "artifacts/model_selection_report.json",
+    "artifacts_manifest":       "artifacts/artifacts_manifest.json",
+    "error_analysis":           "artifacts/error_analysis.json",
+    "safeguards_report":        "artifacts/safeguards_report.json",
+    "cross_validation_report":  "artifacts/cross_validation_report.json",
+    "test_predictions":         "artifacts/test_predictions.csv",
+    "vectorizer":               "models/vectorizer.joblib",
+    "trained_models": {
+      "logistic_regression":    "models/model_logistic_regression.joblib",
+      "linear_svm":             "models/model_linear_svm.joblib",
+      "naive_bayes":            "models/model_naive_bayes.joblib"
+    },
+    "winning_model":            "models/winner.joblib",
+    "winner_meta":              "models/winner.meta.json"
   },
   "environment": {
     "python": "3.11.7",
@@ -459,7 +504,9 @@ Writes `run_manifest.json`:
 }
 ```
 
-The SHA-256 of input files lets the evaluator confirm that fixtures actually flowed through training (no static cache).
+Notes:
+- The `artifacts` block lists **every** produced path, mirroring `artifacts_manifest.json` plus the JSON reports written by earlier stages. `cross_validation_report` is `null` when the CV flag is disabled (the key is always present so consumers can read it without a `KeyError`). Failed-model joblib paths are omitted from `trained_models` since they were not persisted.
+- The SHA-256 of input files lets the evaluator confirm that fixtures actually flowed through training (no static cache).
 
 ### 4.13 Safeguards — `safeguards.py`
 
@@ -588,7 +635,7 @@ A final line prints `OK (N checks passed)` or `FAILED (k of N checks failed)`.
 | 24 | Class imbalance >5x | SAFEGUARDS | warning |
 | 25 | CV folds > smallest class size | CROSS_VAL | reduce folds, record adjustment |
 | 26 | Same model name twice in config | INIT | dedupe, warn |
-| 27 | `validation_split` out of (0.05, 0.5) | INIT | clamp, warn |
+| 27 | `validation_split` outside `(0.0, 1.0)` | INIT | exit 2 with named error — no silent rescaling, the configured fraction is used as-is |
 | 28 | Non-UTF8 text inside CSV cells | preprocessing | preprocess_text handles via the encoding chosen at load; no decoding inside preprocess |
 | 29 | IDs that look numeric vs string | DATA_LOADED | always read as string; preserve original for output |
 | 30 | Windows path separators in manifest | reporting | use `pathlib.PurePosixPath` strings for portability of the JSON |

@@ -1,0 +1,11 @@
+id,text,label
+1,"I loved the onboarding flow, it was simple and fast",positive
+2,"The app crashes every time I try to upload a file",negative
+3,"Support replied quickly and solved my issue",positive
+4,"The latest update made navigation confusing",negative
+5,"Payment was processed smoothly",positive
+6,"Login takes too long and often fails",negative
+7,"Great experience, clean interface",positive
+8,"Notifications are delayed and unreliable",negative
+9,"Very easy to use for first-time users",positive
+10,"Search results are inaccurate",negative

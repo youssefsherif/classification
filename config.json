@@ -1,0 +1,17 @@
+{
+  "random_seed": 42,
+  "validation_split": 0.2,
+  "models": ["logistic_regression", "linear_svm", "naive_bayes"],
+  "vectorizer": {
+    "type": "tfidf",
+    "ngram_range": [1, 2],
+    "max_features": 5000,
+    "min_df": 1
+  },
+  "selection_metric": "macro_f1",
+  "top_k_error_examples": 10,
+  "cross_validation": {
+    "enabled": false,
+    "folds": 5
+  }
+}
