@@ -7,3 +7,5 @@ venv/
 
 artifacts/
 models/
+
+.claude/
